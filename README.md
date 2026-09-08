@@ -22,10 +22,16 @@ This project implements an end-to-end fraud detection platform that processes cr
 
 ```
 Fraud_detection/
+├── README.md                                   # Project documentation (this file)
 ├── Credentials.ipynb                           # Databricks credential setup and secret management
 ├── Kafka_streaming_test.ipynb                  # Kafka streaming pipeline testing
 ├── Autoloader_test.py.ipynb                    # Data autoloader configuration testing
 ├── query test.ipynb                            # SQL query testing
+│
+├── FinGuard Real-time Monitoring Dashboard.lvdash.json  # AI/BI Dashboard for real-time monitoring
+│
+├── assets/                                     # Documentation assets
+│   └── finguard_dashboard_snapshot.png         # Dashboard screenshot (add your screenshot here)
 │
 ├── Postgres_SQL/                               # PostgreSQL stored procedures and functions
 │   └── [Customer data extraction and fraud detection rules]
@@ -77,6 +83,84 @@ Fraud_detection/
 - Secure secret storage using Databricks Secret Scopes
 - Support for Kafka credentials, PostgreSQL connection strings, and API keys
 - Centralized credential management for all integrations
+
+## 📊 Real-Time Monitoring Dashboard
+
+### **FinGuard Real-time Monitoring Dashboard**
+
+A comprehensive Databricks AI/BI dashboard providing real-time visibility into fraud detection operations, transaction patterns, and alert monitoring.
+
+![FinGuard Dashboard](./assets/finguard_dashboard_snapshot.png)
+*Screenshot: FinGuard Real-time Monitoring Dashboard - Real-time fraud detection metrics and analytics*
+
+#### Dashboard Overview
+
+The FinGuard dashboard offers a single-pane view of the entire fraud detection system, aggregating data from Bronze, Silver, and Gold layers to provide actionable insights.
+
+**Dashboard Link**: [FinGuard Real-time Monitoring Dashboard](#dashboard-987890355154191)
+
+#### Key Metrics (KPIs)
+
+The dashboard tracks six critical performance indicators updated in real-time:
+
+* **Total Transactions** - Volume of credit card transactions processed in the last 7 days
+* **Total Transaction Amount** - Aggregate monetary value of all transactions
+* **Total Fraud Alerts** - Count of fraud alerts triggered by the detection system
+* **Total High-Value Alerts** - Number of high-value transaction alerts requiring review
+* **Average Risk Level Score** - Mean risk score across all fraud alerts
+* **Average High-Value Alert Amount** - Mean transaction amount for high-value alerts
+
+#### Visualizations
+
+The dashboard includes 13 interactive widgets organized for comprehensive monitoring:
+
+**Transaction Analytics**
+* **Top 10 Merchants by Transaction Count** (Bar Chart) - Identifies highest-volume merchants
+* **Top 10 Categories by Transaction Amount** (Bar Chart) - Shows spending distribution across merchant categories
+* **Transaction Distribution by Country** (Pie Chart) - Geographic spread of transactions
+* **Transaction Distribution by City** (Pie Chart) - City-level transaction heatmap
+* **Hourly Transaction Volume Trend** (Line Chart) - Real-time transaction flow patterns
+
+**Fraud Detection Monitoring**
+* **Fraud Alert Details** (Table) - Detailed view of all fraud alerts with card numbers, amounts, risk levels, and reason codes
+* **Hourly Fraud Alert Trend** (Line Chart) - Time-series visualization of fraud alert frequency
+
+#### Data Sources
+
+The dashboard queries four primary datasets from the Databricks lakehouse:
+
+1. **Transactions (Last 7 Days)** - `finguard.silver.transactions`
+   - Real-time credit card transaction data
+   - Fields: transaction_id, customer_id, card_number, merchant details, amount, location, timestamp
+
+2. **Fraud Alerts (Last 7 Days)** - `finguard.gold.fraud_card_alert`
+   - Fraud detection system alerts
+   - Fields: alert_id, card_number, amount, risk_level, reason_code, alert_timestamp
+
+3. **High-Value Alerts (Last 7 Days)** - `finguard.gold.high_value_transactions_alert`
+   - Alerts for unusually large transactions
+   - Fields: alert_id, customer_id, transaction_amount, alert_timestamp
+
+4. **All Customers** - `finguard.silver.customers`
+   - Customer master data and segmentation
+   - Fields: customer_id, customer_segment
+
+#### Use Cases
+
+* **Real-Time Monitoring**: Track transaction flow and fraud alerts as they occur
+* **Pattern Analysis**: Identify merchant and category trends that may indicate fraud
+* **Geographic Risk Assessment**: Monitor transaction distribution across countries and cities
+* **Alert Investigation**: Drill down into fraud alert details for investigation
+* **Performance Tracking**: Measure fraud detection system effectiveness through KPIs
+* **Operational Dashboards**: Enable fraud analysts and operations teams to respond quickly
+
+#### Technical Features
+
+* **Auto-Refresh**: Dashboard updates automatically to reflect latest data
+* **7-Day Lookback Window**: Focuses on recent activity for actionable insights
+* **Hourly Aggregation**: Trend charts show patterns at hourly granularity
+* **Interactive Filters**: Drill-down capabilities for detailed analysis
+* **Unity Catalog Integration**: Direct querying of Delta Lake tables
 
 ## 📦 Components Overview
 
@@ -305,6 +389,7 @@ Kafka: CC_Transactions
 
 ## 📊 Monitoring & Alerting
 
+- **FinGuard Real-time Monitoring Dashboard**: Interactive AI/BI dashboard with 13 visualizations for real-time fraud detection monitoring
 - Real-time transaction monitoring against customer profiles
 - Behavioral anomaly detection using historical patterns
 - Fraud watchlist real-time matching
@@ -312,6 +397,7 @@ Kafka: CC_Transactions
 - Email alerts via Gmail API for high-risk transactions
 - Delta Lake transaction history for full audit trails
 - Checkpoint management for streaming job recovery
+- KPI tracking: Total transactions, fraud alerts, high-value alerts, and average risk scores
 
 ## 🛠️ Development & Testing
 
@@ -321,7 +407,9 @@ Kafka: CC_Transactions
 - Streaming job testing and failure recovery
 - PostgreSQL query performance testing
 
-## 📝 Notebooks Description
+## 📝 Notebooks & Dashboards
+
+### Notebooks
 
 | Notebook | Purpose |
 |----------|---------|
@@ -329,6 +417,12 @@ Kafka: CC_Transactions
 | `Kafka_streaming_test.ipynb` | Test Kafka connections, streaming pipelines, and data parsing |
 | `Autoloader_test.py.ipynb` | Test cloud file auto-loading, schema inference, and ingestion |
 | `query test.ipynb` | Validate SQL queries, database connectivity, data quality checks |
+
+### Dashboards
+
+| Dashboard | Purpose | Data Sources |
+|-----------|---------|-------------|
+| [**FinGuard Real-time Monitoring Dashboard**](#dashboard-987890355154191) | Real-time fraud detection monitoring with transaction analytics, fraud alerts, and KPIs | `finguard.silver.transactions`, `finguard.gold.fraud_card_alert`, `finguard.gold.high_value_transactions_alert`, `finguard.silver.customers` |
 
 ## 🔧 Configuration Variables
 
@@ -376,6 +470,7 @@ customer_silver_path = "/Volumes/finguard/source/customers/silver/"
   - `customers_silver`, `transactions_silver`
 - **Gold Layer**: Analytics-ready aggregated data
   - `fraud_scores`, `customer_risk_profiles`, `watchlist_matches`
+  - `fraud_card_alert`, `high_value_transactions_alert`
 
 ## 🔄 ETL/ELT Process
 
@@ -406,10 +501,18 @@ customer_silver_path = "/Volumes/finguard/source/customers/silver/"
 
 ## 📊 Key Metrics & KPIs
 
-- Transaction processing latency (from Kafka to Bronze)
-- Customer data refresh frequency
+**Business Metrics** (tracked in FinGuard Dashboard):
+- Total transaction volume and monetary value
+- Total fraud alerts generated
+- Total high-value transaction alerts
+- Average risk level score across alerts
+- Average high-value alert transaction amount
 - Fraud detection accuracy rate
 - False positive rate
+
+**Technical Metrics**:
+- Transaction processing latency (from Kafka to Bronze)
+- Customer data refresh frequency
 - Processing throughput (transactions/second)
 - Data quality score
 - System availability and uptime
@@ -434,13 +537,21 @@ customer_silver_path = "/Volumes/finguard/source/customers/silver/"
    - Then deploy Kafka streaming pipeline
    - Finally, deploy fraud detection jobs
 
-5. **Validation**
+5. **Set Up Monitoring Dashboard**
+   - Open the FinGuard Real-time Monitoring Dashboard
+   - Verify all widgets are displaying data correctly
+   - Configure auto-refresh settings if needed
+   - Set up alerts for critical KPIs
+
+6. **Validation**
    - Run query tests to validate data
    - Check alert generation
    - Monitor pipeline performance
+   - Review dashboard metrics for accuracy
 
 ## 📖 Documentation
 
+- **FinGuard Real-time Monitoring Dashboard**: See [Dashboard Section](#-real-time-monitoring-dashboard) above
 - Databricks Best Practices: [Link to internal docs]
 - Kafka Configuration: See `Kafka_streaming_test.ipynb`
 - PostgreSQL Setup: See `finguard_customers_silver_load/`
@@ -454,22 +565,4 @@ customer_silver_path = "/Volumes/finguard/source/customers/silver/"
 - **PostgreSQL**: https://www.postgresql.org/
 - **PySpark**: https://spark.apache.org/docs/latest/api/python/
 
-## 📞 Support & Contributions
 
-For issues, questions, or contributions, please refer to the repository's issues and pull requests.
-
-## 📄 License
-
-[Add your license information here]
-
-## 👤 Author
-
-- **Ankit Bisht** (@Ankitbisht01)
-
----
-
-**Last Updated**: September 2026
-
-**Repository**: [Ankitbisht01/Fraud_detection](https://github.com/Ankitbisht01/Fraud_detection)
-
-**Status**: Active Development 🚀
