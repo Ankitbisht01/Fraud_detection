@@ -31,7 +31,8 @@ Fraud_detection/
 ├── FinGuard Real-time Monitoring Dashboard.lvdash.json  # AI/BI Dashboard for real-time monitoring
 │
 ├── assets/                                     # Documentation assets
-│   └── finguard_dashboard_snapshot.png         # Dashboard screenshot (add your screenshot here)
+│   ├── finguard_dashboard_snapshot.png         # Dashboard screenshot
+│   └── pipeline_architecture.png               # Pipeline architecture diagram
 │
 ├── Postgres_SQL/                               # PostgreSQL stored procedures and functions
 │   └── [Customer data extraction and fraud detection rules]
@@ -73,11 +74,13 @@ Fraud_detection/
 - Support for both structured and unstructured data
 
 ### 4. **Fraud Detection Components**
+- **Synthetic Fraud Watchlist Generator** - Automated generation of fraud watchlist records with resume capability
 - Customer data enrichment and deduplication
 - Transaction data ingestion and processing
 - Fraud watchlist management and real-time matching
 - Real-time anomaly detection based on customer behavior
 - Historical fraud pattern analysis and scoring
+- Auto Loader for continuous ingestion of watchlist updates
 
 ### 5. **Credential Management**
 - Secure secret storage using Databricks Secret Scopes
@@ -92,6 +95,32 @@ A comprehensive Databricks AI/BI dashboard providing real-time visibility into f
 
 ![FinGuard Dashboard](./assets/finguard_dashboard_snapshot.png)
 *Screenshot: FinGuard Real-time Monitoring Dashboard - Real-time fraud detection metrics and analytics*
+
+### **Pipeline Architecture**
+
+![Pipeline Architecture](./assets/pipeline_architecture.png)
+*Figure: Complete data pipeline architecture showing the flow from source data through Bronze, Silver, and Gold layers*
+
+The pipeline architecture diagram above illustrates the complete end-to-end data flow:
+
+**Source Data Ingestion**:
+* **Watchlist Data Generator** - Generates synthetic fraud watchlist records and streams them as JSON files
+* **PostgreSQL (Customers)** - Extracts customer master data via JDBC
+* **Kafka (CC_Transactions)** - Real-time credit card transaction stream
+
+**Bronze Layer** - Raw data ingestion with full fidelity:
+* `fraud_watchlist` - Ingested watchlist records
+* `targeted_silver.customers` - Raw customer data
+* `transactions` - Raw transaction data
+
+**Silver Layer** - Cleaned, enriched, and deduplicated data:
+* `fraud_card_alert` - Processed fraud card alerts
+* `high_value_transactions_alert` - High-value transaction alerts
+* `transactions_count_by_merch...` - Aggregated transaction metrics
+
+**Gold Layer** - Analytics-ready business metrics:
+* `fraud_email_notifier_sink` - Email notification queue for fraud alerts
+* `email_notifier_sink` - General email notification system
 
 #### Dashboard Overview
 
@@ -161,6 +190,144 @@ The dashboard queries four primary datasets from the Databricks lakehouse:
 * **Hourly Aggregation**: Trend charts show patterns at hourly granularity
 * **Interactive Filters**: Drill-down capabilities for detailed analysis
 * **Unity Catalog Integration**: Direct querying of Delta Lake tables
+
+## 🔍 Fraud Watchlist Data Generator
+
+### **Synthetic Watchlist Generation System**
+
+The Fraud Watchlist Data Generator is a critical component that creates and maintains a continuously updated fraud watchlist for real-time matching against incoming transactions.
+
+**Location**: `Fraud_watchlist_file_generator/`
+
+### Components
+
+**1. Fraud Watchlist Data Generator Notebook** (`fraud_watchlist_data_generator.ipynb`)
+
+A Python notebook that generates synthetic fraud watchlist records and streams them as JSON files to simulate real-world fraud intelligence updates.
+
+**Key Features**:
+* **CSV-to-JSON Conversion** - Reads fraud watchlist records from a master CSV file
+* **Incremental Processing** - Smart resume capability that tracks the last processed record
+* **Time-Stamped Output** - Each record is written as a separate JSON file with unique timestamp
+* **Simulated Real-Time Streaming** - 5-second delay between files to mimic continuous data arrival
+* **Unity Catalog Volume Integration** - Writes directly to `/Volumes/finguard/source/fraud_watchlist/source_data/`
+* **Idempotent Processing** - Scans existing files to avoid duplicates and resume from last position
+
+**2. Master Watchlist Data** (`fraud_watchlist.csv`)
+
+A CSV file containing the master fraud watchlist records with the following structure:
+* `watchlist_id` - Unique identifier for each watchlist entry (e.g., WL000001)
+* `entity_id` - Card number, customer ID, or merchant ID flagged as fraudulent
+* `entity_type` - Type of entity (card, customer, merchant)
+* `risk_level` - Risk classification (HIGH, MEDIUM, LOW)
+* `reason_code` - Reason for watchlist inclusion
+* `date_added` - Timestamp when the entity was added to the watchlist
+* Additional metadata fields for fraud investigation
+
+### How It Works
+
+```
+┌──────────────────────────────────────────────────────┐
+│  fraud_watchlist.csv                                  │
+│  (Master watchlist with 1000s of records)             │
+└────────────────────┬─────────────────────────────────┘
+                     │
+                     ↓
+┌──────────────────────────────────────────────────────┐
+│  fraud_watchlist_data_generator Notebook             │
+│  ├─ Reads CSV file                                    │
+│  ├─ Checks for existing JSON files                   │
+│  ├─ Resumes from last processed watchlist_id         │
+│  └─ Converts each row to JSON                        │
+└────────────────────┬─────────────────────────────────┘
+                     │
+                     ↓ (One JSON file per row)
+┌──────────────────────────────────────────────────────┐
+│  Unity Catalog Volume                                │
+│  /Volumes/finguard/source/fraud_watchlist/           │
+│  source_data/                                         │
+│  ├─ fraud_watchlist_20240101_123456_000001_0.json   │
+│  ├─ fraud_watchlist_20240101_123501_000002_1.json   │
+│  └─ fraud_watchlist_...                              │
+└────────────────────┬─────────────────────────────────┘
+                     │
+                     ↓ (Auto Loader monitors this path)
+┌──────────────────────────────────────────────────────┐
+│  Bronze Layer: fraud_watchlist_bronze                │
+│  (Auto Loader ingests new JSON files)                │
+└────────────────────┬─────────────────────────────────┘
+                     │
+                     ↓
+┌──────────────────────────────────────────────────────┐
+│  Fraud Detection Engine                              │
+│  - Matches transactions against watchlist            │
+│  - Triggers alerts for matches                        │
+│  - Updates risk scores                                │
+└──────────────────────────────────────────────────────┘
+```
+
+### Processing Logic
+
+**Resume Capability**:
+1. Scans existing JSON files in the volume
+2. Extracts the highest `watchlist_id` (e.g., WL000523)
+3. Filters CSV to start from the next record (WL000524)
+4. Processes only unprocessed records
+
+**File Generation**:
+- Each CSV row becomes one JSON file
+- Filename format: `fraud_watchlist_YYYYMMDD_HHMMSS_microseconds_index.json`
+- Single-line JSON for efficient parsing
+- 5-second interval between files to simulate streaming
+
+**Example JSON Output**:
+```json
+{"watchlist_id": "WL000001", "entity_id": "4532123456789012", "entity_type": "card", "risk_level": "HIGH", "reason_code": "STOLEN_CARD", "date_added": "2024-01-15 10:30:00"}
+```
+
+### Use Cases
+
+* **Fraud Intelligence Simulation** - Mimics real-world fraud intelligence feeds from external sources
+* **Testing & Development** - Provides controllable test data for fraud detection pipeline validation
+* **Continuous Data Stream** - Enables testing of Auto Loader and streaming ingestion patterns
+* **Watchlist Updates** - Simulates periodic updates to fraud watchlists (daily, hourly, or real-time)
+* **Compliance & Auditing** - Maintains full audit trail of watchlist changes with timestamps
+
+### Integration with Pipeline
+
+The Fraud Watchlist Generator integrates seamlessly with the fraud detection pipeline:
+
+1. **Generation Phase** - Notebook generates JSON files continuously
+2. **Ingestion Phase** - Auto Loader detects new files and ingests to Bronze layer
+3. **Processing Phase** - Transactions are matched against watchlist entries in real-time
+4. **Alert Phase** - Matches trigger immediate fraud alerts and email notifications
+
+### Configuration
+
+**Input Path**:
+```python
+csv_path = "/Workspace/Users/.../fraud_watchlist.csv"
+```
+
+**Output Volume**:
+```python
+output_path = "/Volumes/finguard/source/fraud_watchlist/source_data/"
+```
+
+**Processing Rate**:
+```python
+time.sleep(5)  # 5 seconds between records
+```
+
+### Monitoring
+
+The generator provides detailed console output:
+* Total rows to process
+* Current row being written with full JSON content
+* Watchlist ID being processed
+* Countdown timer between files
+* Resume status (starting from which watchlist_id)
+* Completion summary
 
 ## 📦 Components Overview
 
@@ -243,12 +410,21 @@ The dashboard queries four primary datasets from the Databricks lakehouse:
   - `finguard.bronze.transactions_batch_test` - Batch transaction history
   - `finguard.bronze.transactions_streaming_test` - Real-time transactions
 
-### Data Autoloader (`Autoloader_test.py.ipynb` & `Fraud_watchlist_file_generator/`)
-- Auto-detects and processes new files from cloud storage
+### Data Autoloader (`Autoloader_test.py.ipynb`)
+- Auto-detects and processes new files from Unity Catalog volumes
 - Supports JSON format for fraud watchlist files
 - Infers schema automatically with schema evolution
 - Writes to `finguard.bronze.fraud_watchlist_batch_test` table
 - Tracks file metadata and ingestion timestamps
+- Monitors `/Volumes/finguard/source/fraud_watchlist/source_data/` for new watchlist files
+
+### Fraud Watchlist File Generator (`Fraud_watchlist_file_generator/`)
+- Generates synthetic fraud watchlist records from CSV master data
+- Converts each record to individual timestamped JSON files
+- Streams files to Unity Catalog volume with configurable intervals (5 seconds default)
+- Smart resume capability - tracks last processed watchlist_id and continues from there
+- Idempotent processing prevents duplicate records
+- Simulates real-world fraud intelligence feed updates
 
 ### PostgreSQL Backend (`Postgres_SQL/`)
 - Stores fraud detection rules and thresholds
@@ -321,14 +497,19 @@ Required Libraries:
 Step 1: Run finguard_customers_silver_load
         └─> Ingest PostgreSQL customer data to Bronze/Silver
 
-Step 2: Run kafka_producer
+Step 2: Run Fraud_watchlist_file_generator/fraud_watchlist_data_generator
+        └─> Generate synthetic fraud watchlist JSON files
+        └─> Files stream to /Volumes/finguard/source/fraud_watchlist/
+
+Step 3: Run Autoloader_test (or configure streaming job)
+        └─> Auto Loader monitors volume and ingests new watchlist files
+
+Step 4: Run kafka_producer
         └─> Start producing transactions to Kafka
 
-Step 3: Run finguard_streaming
+Step 5: Run finguard_streaming
         └─> Consume transactions and write to Delta Lake
-
-Step 4: Run Fraud_watchlist_file_generator
-        └─> Generate and update fraud watchlist
+        └─> Match transactions against fraud watchlist
 ```
 
 ## 🔄 Data Flow Details
@@ -416,6 +597,7 @@ Kafka: CC_Transactions
 | `Credentials.ipynb` | Set up and manage Databricks secrets, Kafka, PostgreSQL credentials |
 | `Kafka_streaming_test.ipynb` | Test Kafka connections, streaming pipelines, and data parsing |
 | `Autoloader_test.py.ipynb` | Test cloud file auto-loading, schema inference, and ingestion |
+| `fraud_watchlist_data_generator.ipynb` | Generate synthetic fraud watchlist JSON files, stream to Unity Catalog volume |
 | `query test.ipynb` | Validate SQL queries, database connectivity, data quality checks |
 
 ### Dashboards
@@ -544,8 +726,11 @@ customer_silver_path = "/Volumes/finguard/source/customers/silver/"
    - Set up alerts for critical KPIs
 
 6. **Validation**
+   - Verify watchlist JSON files are being generated in the volume
+   - Confirm Auto Loader is ingesting files to Bronze layer
    - Run query tests to validate data
-   - Check alert generation
+   - Check fraud watchlist matching is working
+   - Check alert generation for watchlist matches
    - Monitor pipeline performance
    - Review dashboard metrics for accuracy
 
